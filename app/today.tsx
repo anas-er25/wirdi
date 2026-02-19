@@ -162,6 +162,15 @@ export default function Today() {
                     الذهاب إلى الأذكار
                 </Text>
             </Pressable>
+            <Pressable
+                onPress={() => router.push("/quran")}
+                style={({ pressed }) => [
+                    { marginTop: 10, backgroundColor: "#F6EBDD", borderWidth: 1, borderColor: "#D5A076", padding: 14, borderRadius: 16, alignItems: "center" },
+                    pressed && { opacity: 0.9 },
+                ]}
+            >
+                <Text style={{ color: "#9F5921", fontWeight: "900" }}>المصحف</Text>
+            </Pressable>
 
         </View>
     );
