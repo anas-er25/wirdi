@@ -4,11 +4,15 @@ import { useEffect, useMemo, useState } from "react";
 import {
     Platform,
     Pressable,
+    ScrollView,
     StatusBar,
     StyleSheet,
     Text,
     View,
 } from "react-native";
+import type { HadithItem, PrayerTimesData } from "../constants/types";
+import { getNextPrayer, getPrayerTimes, PRAYER_NAMES } from "../services/adhan";
+import { getRandomHadith, getSectionName } from "../services/hadith";
 
 function todayKey() {
     const d = new Date();
@@ -21,10 +25,14 @@ export default function Today() {
     const [dailyHizb, setDailyHizb] = useState(1);
     const [progressDays, setProgressDays] = useState(0);
     const [doneToday, setDoneToday] = useState(false);
+    const [prayerData, setPrayerData] = useState<PrayerTimesData | null>(null);
+    const [dailyHadith, setDailyHadith] = useState<HadithItem | null>(null);
     const router = useRouter();
 
     useEffect(() => {
         load();
+        loadPrayerTimes();
+        loadDailyHadith();
     }, []);
 
     const load = async () => {
@@ -41,6 +49,18 @@ export default function Today() {
         setDoneToday(last === tk);
     };
 
+    const loadPrayerTimes = async () => {
+        const data = await getPrayerTimes();
+        if (data) setPrayerData(data);
+    };
+
+    const loadDailyHadith = () => {
+        setTimeout(() => {
+            const h = getRandomHadith();
+            setDailyHadith(h);
+        }, 100);
+    };
+
     const { start, end } = useMemo(() => {
         const startH = progressDays * dailyHizb + 1;
         const endH = Math.min(startH + dailyHizb - 1, 60);
@@ -54,36 +74,36 @@ export default function Today() {
 
     const complete = async () => {
         if (doneToday) return;
-
         const newDays = progressDays + 1;
         await AsyncStorage.multiSet([
             ["progressDays", String(newDays)],
             ["lastCompletedDate", todayKey()],
         ]);
-
         setProgressDays(newDays);
         setDoneToday(true);
     };
 
     const undo = async () => {
         if (!doneToday) return;
-
         const newDays = Math.max(0, progressDays - 1);
-
         await AsyncStorage.multiSet([
             ["progressDays", String(newDays)],
             ["lastCompletedDate", ""],
         ]);
-
         setProgressDays(newDays);
         setDoneToday(false);
     };
+
+    const nextPrayer = useMemo(() => {
+        if (!prayerData) return null;
+        return getNextPrayer(prayerData.timings);
+    }, [prayerData]);
 
     return (
         <View style={styles.screen}>
             <StatusBar barStyle={Platform.OS === "ios" ? "dark-content" : "default"} />
 
-            {/* Top bar: title + settings */}
+            {/* Top bar */}
             <View style={styles.topBar}>
                 <Pressable
                     onPress={() => router.push("/settings")}
@@ -98,80 +118,171 @@ export default function Today() {
                 </View>
             </View>
 
-            <View style={styles.hero}>
-                <Text style={styles.heroLabel}>قراءة اليوم</Text>
-                <Text style={styles.heroRange}>
-                    {end === start ? `الحزب ${start}` : `الحزب ${start} — ${end}`}
-                </Text>
+            <ScrollView
+                showsVerticalScrollIndicator={false}
+                contentContainerStyle={{ paddingBottom: 30 }}
+            >
+                {/* ═══ Prayer Times Card ═══ */}
+                {prayerData && (
+                    <View style={styles.prayerCard}>
+                        {/* Hijri date header */}
+                        <View style={styles.prayerHeader}>
+                            <Text style={styles.prayerDateHijri}>
+                                {prayerData.date.hijri.day} {prayerData.date.hijri.month.ar}{" "}
+                                {prayerData.date.hijri.year}
+                            </Text>
+                            <Text style={styles.prayerDateGreg}>
+                                {prayerData.date.readable}
+                            </Text>
+                        </View>
 
-                <View style={styles.progressBox}>
-                    <View style={styles.progressMeta}>
-                        <Text style={styles.progressText}>التقدم</Text>
-                        <Text style={styles.progressText}>{percent}%</Text>
+                        {/* Next prayer highlight */}
+                        {nextPrayer && (
+                            <View style={styles.nextPrayerBox}>
+                                <Text style={styles.nextPrayerLabel}>الصلاة القادمة</Text>
+                                <View style={styles.nextPrayerRow}>
+                                    <Text style={styles.nextPrayerTime}>{nextPrayer.time}</Text>
+                                    <Text style={styles.nextPrayerName}>{nextPrayer.ar}</Text>
+                                </View>
+                            </View>
+                        )}
+
+                        {/* All 5 prayer times row */}
+                        <View style={styles.prayerTimesRow}>
+                            {PRAYER_NAMES.map((p) => {
+                                const isNext = nextPrayer?.key === p.key;
+                                return (
+                                    <View
+                                        key={p.key}
+                                        style={[
+                                            styles.prayerTimeItem,
+                                            isNext && styles.prayerTimeItemActive,
+                                        ]}
+                                    >
+                                        <Text
+                                            style={[
+                                                styles.prayerTimeLabel,
+                                                isNext && styles.prayerTimeLabelActive,
+                                            ]}
+                                        >
+                                            {p.ar}
+                                        </Text>
+                                        <Text
+                                            style={[
+                                                styles.prayerTimeValue,
+                                                isNext && styles.prayerTimeValueActive,
+                                            ]}
+                                        >
+                                            {prayerData.timings[p.key]}
+                                        </Text>
+                                    </View>
+                                );
+                            })}
+                        </View>
+                    </View>
+                )}
+
+                {/* ═══ Quran Progress Hero ═══ */}
+                <View style={styles.hero}>
+                    <Text style={styles.heroLabel}>قراءة اليوم</Text>
+                    <Text style={styles.heroRange}>
+                        {end === start ? `الحزب ${start}` : `الحزب ${start} — ${end}`}
+                    </Text>
+
+                    <View style={styles.progressBox}>
+                        <View style={styles.progressMeta}>
+                            <Text style={styles.progressText}>التقدم</Text>
+                            <Text style={styles.progressText}>{percent}%</Text>
+                        </View>
+
+                        <View style={styles.barTrack}>
+                            <View style={[styles.barFill, { width: `${percent}%` }]} />
+                        </View>
+
+                        <Text style={styles.progressHint}>
+                            منجز: {Math.min(progressDays * dailyHizb, 60)} / 60 حزب
+                        </Text>
                     </View>
 
-                    <View style={styles.barTrack}>
-                        <View style={[styles.barFill, { width: `${percent}%` }]} />
-                    </View>
+                    <Pressable
+                        onPress={complete}
+                        style={({ pressed }) => [
+                            styles.btn,
+                            doneToday && styles.btnDisabled,
+                            pressed && !doneToday && styles.btnPressed,
+                        ]}
+                    >
+                        <Text style={styles.btnText}>{doneToday ? "تم اليوم" : "تمّ اليوم"}</Text>
+                    </Pressable>
 
-                    <Text style={styles.progressHint}>
-                        منجز: {Math.min(progressDays * dailyHizb, 60)} / 60 حزب
+                    {doneToday && (
+                        <Pressable
+                            onPress={undo}
+                            style={({ pressed }) => [styles.btnGhost, pressed && styles.btnGhostPressed]}
+                        >
+                            <Text style={styles.btnGhostText}>تراجع</Text>
+                        </Pressable>
+                    )}
+
+                    <Text style={styles.note}>
+                        {doneToday ? "تم تسجيل إنجاز اليوم." : "سجّل إنجاز اليوم مرة واحدة فقط."}
                     </Text>
                 </View>
 
-                <Pressable
-                    onPress={complete}
-                    style={({ pressed }) => [
-                        styles.btn,
-                        doneToday && styles.btnDisabled,
-                        pressed && !doneToday && styles.btnPressed,
-                    ]}
-                >
-                    <Text style={styles.btnText}>{doneToday ? "تم اليوم" : "تمّ اليوم"}</Text>
-                </Pressable>
-
-                {doneToday && (
+                {/* ═══ Daily Hadith Card ═══ */}
+                {dailyHadith && (
                     <Pressable
-                        onPress={undo}
-                        style={({ pressed }) => [styles.btnGhost, pressed && styles.btnGhostPressed]}
+                        onPress={() =>
+                            router.push(`/hadith/${dailyHadith.reference.book}` as any)
+                        }
+                        style={({ pressed }) => [
+                            styles.hadithCard,
+                            pressed && { opacity: 0.95 },
+                        ]}
                     >
-                        <Text style={styles.btnGhostText}>تراجع</Text>
+                        <View style={styles.hadithHeader}>
+                            <Text style={styles.hadithBadge}>حديث اليوم</Text>
+                            <Text style={styles.hadithRef}>
+                                {getSectionName(dailyHadith.reference.book)}
+                            </Text>
+                        </View>
+                        <Text style={styles.hadithText} numberOfLines={4}>
+                            {dailyHadith.text}
+                        </Text>
+                        <Text style={styles.hadithMore}>اقرأ المزيد ←</Text>
                     </Pressable>
                 )}
 
-                <Text style={styles.note}>
-                    {doneToday ? "تم تسجيل إنجاز اليوم." : "سجّل إنجاز اليوم مرة واحدة فقط."}
-                </Text>
-            </View>
-            <Pressable
-                onPress={() => router.push("/adhkar")}
-                style={({ pressed }) => [
-                    {
-                        marginTop: 16,
-                        backgroundColor: "#F6EBDD",
-                        borderWidth: 1,
-                        borderColor: "#D5A076",
-                        padding: 14,
-                        borderRadius: 16,
-                        alignItems: "center",
-                    },
-                    pressed && { opacity: 0.9 },
-                ]}
-            >
-                <Text style={{ color: "#9F5921", fontWeight: "900" }}>
-                    الذهاب إلى الأذكار
-                </Text>
-            </Pressable>
-            <Pressable
-                onPress={() => router.push("/quran")}
-                style={({ pressed }) => [
-                    { marginTop: 10, backgroundColor: "#F6EBDD", borderWidth: 1, borderColor: "#D5A076", padding: 14, borderRadius: 16, alignItems: "center" },
-                    pressed && { opacity: 0.9 },
-                ]}
-            >
-                <Text style={{ color: "#9F5921", fontWeight: "900" }}>المصحف</Text>
-            </Pressable>
+                {/* ═══ Navigation Buttons ═══ */}
+                <Pressable
+                    onPress={() => router.push("/adhkar")}
+                    style={({ pressed }) => [styles.navBtn, pressed && { opacity: 0.9 }]}
+                >
+                    <Text style={styles.navBtnText}>الذهاب إلى الأذكار</Text>
+                </Pressable>
 
+                <Pressable
+                    onPress={() => router.push("/quran")}
+                    style={({ pressed }) => [
+                        styles.navBtn,
+                        { marginTop: 10 },
+                        pressed && { opacity: 0.9 },
+                    ]}
+                >
+                    <Text style={styles.navBtnText}>المصحف</Text>
+                </Pressable>
+
+                <Pressable
+                    onPress={() => router.push("/hadith")}
+                    style={({ pressed }) => [
+                        styles.navBtn,
+                        { marginTop: 10 },
+                        pressed && { opacity: 0.9 },
+                    ]}
+                >
+                    <Text style={styles.navBtnText}>صحيح البخاري</Text>
+                </Pressable>
+            </ScrollView>
         </View>
     );
 }
@@ -194,7 +305,6 @@ const styles = StyleSheet.create({
         flex: 1,
         marginRight: 10,
     },
-
     title: {
         fontSize: 26,
         fontWeight: "900",
@@ -217,15 +327,99 @@ const styles = StyleSheet.create({
         borderWidth: 1,
         borderColor: "#E2CBB6",
     },
-    settingsBtnPressed: {
-        opacity: 0.9,
+    settingsBtnPressed: { opacity: 0.9 },
+    settingsBtnText: { color: "#9F5921", fontWeight: "900", fontSize: 16 },
+
+    // ─── Prayer Times Card ────────────────────────
+    prayerCard: {
+        backgroundColor: "#F6EBDD",
+        borderRadius: 22,
+        padding: 18,
+        borderWidth: 1,
+        borderColor: "#E2CBB6",
+        marginBottom: 14,
     },
-    settingsBtnText: {
-        color: "#9F5921",
+    prayerHeader: {
+        flexDirection: "row-reverse",
+        justifyContent: "space-between",
+        alignItems: "center",
+        marginBottom: 12,
+    },
+    prayerDateHijri: {
+        fontSize: 14,
         fontWeight: "900",
-        fontSize: 16,
+        color: "#9F5921",
+    },
+    prayerDateGreg: {
+        fontSize: 12,
+        fontWeight: "700",
+        color: "#7A4318",
+    },
+    nextPrayerBox: {
+        backgroundColor: "#FFFFFF",
+        borderRadius: 16,
+        padding: 14,
+        borderWidth: 1,
+        borderColor: "#E2CBB6",
+        marginBottom: 12,
+    },
+    nextPrayerLabel: {
+        fontSize: 11,
+        fontWeight: "900",
+        color: "#D5A076",
+        textAlign: "right",
+        marginBottom: 6,
+    },
+    nextPrayerRow: {
+        flexDirection: "row-reverse",
+        justifyContent: "space-between",
+        alignItems: "center",
+    },
+    nextPrayerName: {
+        fontSize: 22,
+        fontWeight: "900",
+        color: "#9F5921",
+    },
+    nextPrayerTime: {
+        fontSize: 22,
+        fontWeight: "900",
+        color: "#9F5921",
+    },
+    prayerTimesRow: {
+        flexDirection: "row-reverse",
+        justifyContent: "space-between",
+        gap: 6,
+    },
+    prayerTimeItem: {
+        flex: 1,
+        alignItems: "center",
+        backgroundColor: "#EDE1CF",
+        borderRadius: 12,
+        paddingVertical: 10,
+        paddingHorizontal: 4,
+    },
+    prayerTimeItemActive: {
+        backgroundColor: "#D5A076",
+    },
+    prayerTimeLabel: {
+        fontSize: 10,
+        fontWeight: "900",
+        color: "#7A4318",
+        marginBottom: 4,
+    },
+    prayerTimeLabelActive: {
+        color: "#FFFFFF",
+    },
+    prayerTimeValue: {
+        fontSize: 12,
+        fontWeight: "900",
+        color: "#9F5921",
+    },
+    prayerTimeValueActive: {
+        color: "#FFFFFF",
     },
 
+    // ─── Quran Progress Hero ──────────────────────
     hero: {
         backgroundColor: "#F6EBDD",
         borderRadius: 22,
@@ -292,17 +486,9 @@ const styles = StyleSheet.create({
         borderRadius: 16,
         alignItems: "center",
     },
-    btnDisabled: {
-        backgroundColor: "#E2CBB6",
-    },
-    btnPressed: {
-        backgroundColor: "#C48B61",
-    },
-    btnText: {
-        color: "#9F5921",
-        fontSize: 16,
-        fontWeight: "900",
-    },
+    btnDisabled: { backgroundColor: "#E2CBB6" },
+    btnPressed: { backgroundColor: "#C48B61" },
+    btnText: { color: "#9F5921", fontSize: 16, fontWeight: "900" },
 
     btnGhost: {
         marginTop: 10,
@@ -314,11 +500,7 @@ const styles = StyleSheet.create({
         alignItems: "center",
     },
     btnGhostPressed: { opacity: 0.9 },
-    btnGhostText: {
-        color: "#9F5921",
-        fontSize: 16,
-        fontWeight: "900",
-    },
+    btnGhostText: { color: "#9F5921", fontSize: 16, fontWeight: "900" },
 
     note: {
         marginTop: 12,
@@ -327,4 +509,61 @@ const styles = StyleSheet.create({
         textAlign: "right",
         fontWeight: "700",
     },
+
+    // ─── Daily Hadith Card ────────────────────────
+    hadithCard: {
+        backgroundColor: "#F6EBDD",
+        borderRadius: 22,
+        padding: 18,
+        borderWidth: 1,
+        borderColor: "#E2CBB6",
+        marginTop: 14,
+    },
+    hadithHeader: {
+        flexDirection: "row-reverse",
+        justifyContent: "space-between",
+        alignItems: "center",
+        marginBottom: 10,
+    },
+    hadithBadge: {
+        fontSize: 11,
+        fontWeight: "900",
+        color: "#FFFFFF",
+        backgroundColor: "#D5A076",
+        paddingHorizontal: 10,
+        paddingVertical: 4,
+        borderRadius: 999,
+        overflow: "hidden",
+    },
+    hadithRef: {
+        fontSize: 11,
+        fontWeight: "800",
+        color: "#7A4318",
+    },
+    hadithText: {
+        fontSize: 15,
+        fontWeight: "700",
+        color: "#9F5921",
+        lineHeight: 26,
+        textAlign: "right",
+    },
+    hadithMore: {
+        marginTop: 10,
+        fontSize: 12,
+        fontWeight: "900",
+        color: "#D5A076",
+        textAlign: "left",
+    },
+
+    // ─── Navigation Buttons ───────────────────────
+    navBtn: {
+        marginTop: 16,
+        backgroundColor: "#F6EBDD",
+        borderWidth: 1,
+        borderColor: "#D5A076",
+        padding: 14,
+        borderRadius: 16,
+        alignItems: "center",
+    },
+    navBtnText: { color: "#9F5921", fontWeight: "900" },
 });
