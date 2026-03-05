@@ -1,11 +1,11 @@
-import * as Haptics from "expo-haptics";
 import AsyncStorage from "@react-native-async-storage/async-storage";
+import * as Haptics from "expo-haptics";
 import { useRouter } from "expo-router";
 import { useEffect, useMemo, useState } from "react";
 import { Platform, Pressable, ScrollView, StatusBar, StyleSheet, Text, View } from "react-native";
 
 type Zikr = { id: string; text: string; count: number; hint?: string };
-type Mode = "morning" | "evening" | "afterPrayer" | "sleep" | "travel";
+type Mode = "morning" | "evening" | "afterPrayer" | "sleep" | "travel" | "prayersForTheMessengerOfGod" | "istighfar";
 
 const MORNING: Zikr[] = [
   { id: "m1", text: "أَصْبَحْنَا وَأَصْبَحَ المُلْكُ لِلَّهِ", count: 1 },
@@ -47,12 +47,26 @@ const TRAVEL: Zikr[] = [
   { id: "tr4", text: "اللَّهُمَّ أَنْتَ الصَّاحِبُ فِي السَّفَرِ وَالخَلِيفَةُ فِي الأَهْلِ", count: 1 },
 ];
 
+const PrayersfortheMessengerofGod: Zikr[] = [
+  { id: "tr1", text: "اللهم صل على محمد وعلى آل محمد، كما صليت على إبراهيم وعلى آل إبراهيم إنك حميد مجيد، اللهم بارك على محمد وعلى آل محمد كما باركت على إبراهيم وعلى آل إبراهيم إنك حميد مجيد", count: 100, hint: "١٠٠ مرة" },
+  { id: "tr2", text: "اللهم صل على محمد وعلى أزواجه وذريته كما صليت على آل إبراهيم، وبارك على محمد وعلى أزواجه وذريته كما باركت على آل إبراهيم، إنك حميد مجيد", count: 100, hint: "١٠٠ مرة" },
+  { id: "tr3", text: "اللهم صل على محمد عبدك ورسولك كما صليت على إبراهيم ، وبارك على محمد وعلى آل محمد كما باركت على إبراهيم وعلى آل إبراهيم", count: 100, hint: "١٠٠ مرة" },
+];
+
+const ISTIGHFAR: Zikr[] = [
+  { id: "tr1", text: "اللهم أنت ربي لا إله إلا أنت، خلقتني وأنا عبدك، وأنا على عهدك ووعدك ما استطعت، أعوذ بك من شر ما صنعت، أبوء لك بنعمتك علي، وأبوء بذنبي فاغفر لي؛ فإنه لا يغفر الذنوب إلا أنت", count: 100, hint: "١٠٠ مرة" },
+  { id: "tr2", text: "اللهم اغفر لي ما قدمت، وما أخرت، وما أسررت وما أعلنت، وما أسرفت وما أنت أعلم به مني،، أنت المقدم وأنت المؤخر لا إله إلا أنت", count: 100, hint: "١٠٠ مرة" },
+  { id: "tr3", text: "اللهم اغفر لي خطيئتي وجهلي، وإسرافي في أمري، وما أنت أعلم به مني، اللهم اغفر لي جدي وهزلي، وخطئي وعمدي وكل ذلك عندي، اللهم اغفر لي ما قدمت وما أخرت وما أسررت وما أعلنت وما أنت أعلم به مني، أنت المقدم، وأنت المؤخر، وأنت على كل شيء قدير", count: 100, hint: "١٠٠ مرة" },
+];
+
 const ALL_LISTS: Record<Mode, Zikr[]> = {
   morning: MORNING,
   evening: EVENING,
   afterPrayer: AFTER_PRAYER,
   sleep: SLEEP,
   travel: TRAVEL,
+  prayersForTheMessengerOfGod: PrayersfortheMessengerofGod,
+  istighfar: ISTIGHFAR,
 };
 
 const MODE_LABELS: Record<Mode, string> = {
@@ -61,9 +75,11 @@ const MODE_LABELS: Record<Mode, string> = {
   afterPrayer: "بعد الصلاة",
   sleep: "النوم",
   travel: "السفر",
+  prayersForTheMessengerOfGod: "الصلاة على رسول الله",
+  istighfar: "الاستغفار",
 };
 
-const MODES: Mode[] = ["morning", "evening", "afterPrayer", "sleep", "travel"];
+const MODES: Mode[] = ["morning", "evening", "afterPrayer", "sleep", "travel", "prayersForTheMessengerOfGod", "istighfar"];
 
 const STORAGE_KEY = "adhkarCounters_v3";
 const DATE_KEY = "adhkar_last_reset_date_v1";

@@ -2,6 +2,7 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
 import { useRouter } from "expo-router";
 import { useEffect, useMemo, useState } from "react";
 import {
+    Modal,
     Platform,
     Pressable,
     ScrollView,
@@ -14,17 +15,45 @@ import type { HadithItem, PrayerTimesData } from "../constants/types";
 import { getLocationStatus, getNextPrayer, getPrayerTimes, PRAYER_NAMES } from "../services/adhan";
 import { getRandomHadith, getSectionName } from "../services/hadith";
 
-function todayKey() {
-    const d = new Date();
-    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(
-        d.getDate()
-    ).padStart(2, "0")}`;
+function KhatmatCard({ khatmat }: { khatmat: string[] }) {
+    const [expanded, setExpanded] = useState(false);
+    const displayed = expanded ? khatmat : khatmat.slice(-2).reverse();
+    const hidden = khatmat.length - 2;
+
+    return (
+        <View style={styles.khatmatCard}>
+            <View style={styles.khatmatHeaderRow}>
+                <Text style={styles.khatmatTitle}>سجل الختمات 🏆</Text>
+                <Text style={styles.khatmatCount}>{khatmat.length} ختمة</Text>
+            </View>
+
+            {displayed.map((k, i) => (
+                <View key={i} style={styles.khatmaRow}>
+                    <Text style={styles.khatmaRowText}>{k}</Text>
+                    <Text style={styles.khatmaRowIcon}>✅</Text>
+                </View>
+            ))}
+
+            {khatmat.length > 2 && (
+                <Pressable
+                    onPress={() => setExpanded(!expanded)}
+                    style={({ pressed }) => [styles.expandBtn, pressed && { opacity: 0.8 }]}
+                >
+                    <Text style={styles.expandBtnText}>
+                        {expanded ? "عرض أقل ▲" : `عرض ${hidden} ختمات أخرى ▼`}
+                    </Text>
+                </Pressable>
+            )}
+        </View>
+    );
 }
 
 export default function Today() {
     const [dailyHizb, setDailyHizb] = useState(1);
     const [progressDays, setProgressDays] = useState(0);
-    const [doneToday, setDoneToday] = useState(false);
+    const [khatmat, setKhatmat] = useState<string[]>([]);
+    const [showCelebration, setShowCelebration] = useState(false);
+    const [newKhatmaNumber, setNewKhatmaNumber] = useState(0);
     const [prayerData, setPrayerData] = useState<PrayerTimesData | null>(null);
     const [locationStatus, setLocationStatus] = useState<"default" | "custom">("default");
     const [dailyHadith, setDailyHadith] = useState<HadithItem | null>(null);
@@ -39,15 +68,14 @@ export default function Today() {
     const load = async () => {
         const hizb = Number((await AsyncStorage.getItem("dailyHizb")) || "1");
         const days = Number((await AsyncStorage.getItem("progressDays")) || "0");
-        const last = (await AsyncStorage.getItem("lastCompletedDate")) || "";
-        const tk = todayKey();
+        const storedKhatmat = await AsyncStorage.getItem("khatmat");
 
         const safeHizb = Number.isFinite(hizb) && hizb >= 1 && hizb <= 60 ? hizb : 1;
         const safeDays = Number.isFinite(days) && days >= 0 ? days : 0;
 
         setDailyHizb(safeHizb);
         setProgressDays(safeDays);
-        setDoneToday(last === tk);
+        setKhatmat(storedKhatmat ? JSON.parse(storedKhatmat) : []);
     };
 
     const loadPrayerTimes = async () => {
@@ -56,44 +84,82 @@ export default function Today() {
         setLocationStatus(getLocationStatus());
     };
 
-    const loadDailyHadith = () => {
-        setTimeout(() => {
-            const h = getRandomHadith();
-            setDailyHadith(h);
-        }, 100);
+    const loadDailyHadith = async () => {
+        const today = new Date().toISOString().split("T")[0];
+        const stored = await AsyncStorage.getItem("dailyHadith");
+
+        if (stored) {
+            const { date, hadith } = JSON.parse(stored);
+            if (date === today) {
+                // Même jour → on réutilise le hadith sauvegardé
+                setDailyHadith(hadith);
+                return;
+            }
+        }
+
+        // Nouveau jour → on tire un nouveau hadith et on le sauvegarde
+        const h = getRandomHadith();
+        await AsyncStorage.setItem("dailyHadith", JSON.stringify({ date: today, hadith: h }));
+        setDailyHadith(h);
     };
 
+    // Total hizb completed across all khatmat
+    const totalHizbDone = useMemo(() => progressDays * dailyHizb, [progressDays, dailyHizb]);
+
+    // Current cycle progress (0–60)
+    const currentCycleHizb = useMemo(() => totalHizbDone % 60, [totalHizbDone]);
+
     const { start, end } = useMemo(() => {
-        const startH = progressDays * dailyHizb + 1;
+        const startH = currentCycleHizb + 1;
         const endH = Math.min(startH + dailyHizb - 1, 60);
         return { start: startH, end: endH };
-    }, [progressDays, dailyHizb]);
+    }, [currentCycleHizb, dailyHizb]);
 
     const percent = useMemo(() => {
-        const totalDone = Math.min(progressDays * dailyHizb, 60);
-        return Math.max(0, Math.min(100, Math.round((totalDone / 60) * 100)));
-    }, [progressDays, dailyHizb]);
+        return Math.max(0, Math.min(100, Math.round((currentCycleHizb / 60) * 100)));
+    }, [currentCycleHizb]);
+
+    const getKhatmaName = (index: number): string => {
+        const ordinals = [
+            "الأولى", "الثانية", "الثالثة", "الرابعة", "الخامسة",
+            "السادسة", "السابعة", "الثامنة", "التاسعة", "العاشرة",
+        ];
+        if (index < ordinals.length) return `الختمة ${ordinals[index]}`;
+        return `الختمة ${index + 1}`;
+    };
 
     const complete = async () => {
-        if (doneToday) return;
         const newDays = progressDays + 1;
-        await AsyncStorage.multiSet([
-            ["progressDays", String(newDays)],
-            ["lastCompletedDate", todayKey()],
-        ]);
+        const newTotalHizb = newDays * dailyHizb;
+
+        // Check if a new khatma is completed
+        const prevCycles = Math.floor(totalHizbDone / 60);
+        const newCycles = Math.floor(newTotalHizb / 60);
+
+        if (newCycles > prevCycles) {
+            // A khatma was just completed!
+            const date = new Date().toLocaleDateString("ar-MA", {
+                year: "numeric",
+                month: "long",
+                day: "numeric",
+            });
+            const khatmaName = getKhatmaName(newCycles - 1);
+            const newKhatmat = [...khatmat, `${khatmaName} — ${date}`];
+
+            await AsyncStorage.setItem("khatmat", JSON.stringify(newKhatmat));
+            setKhatmat(newKhatmat);
+            setNewKhatmaNumber(newCycles);
+            setShowCelebration(true);
+        }
+
+        await AsyncStorage.setItem("progressDays", String(newDays));
         setProgressDays(newDays);
-        setDoneToday(true);
     };
 
     const undo = async () => {
-        if (!doneToday) return;
         const newDays = Math.max(0, progressDays - 1);
-        await AsyncStorage.multiSet([
-            ["progressDays", String(newDays)],
-            ["lastCompletedDate", ""],
-        ]);
+        await AsyncStorage.setItem("progressDays", String(newDays));
         setProgressDays(newDays);
-        setDoneToday(false);
     };
 
     const nextPrayer = useMemo(() => {
@@ -104,6 +170,33 @@ export default function Today() {
     return (
         <View style={styles.screen}>
             <StatusBar barStyle={Platform.OS === "ios" ? "dark-content" : "default"} />
+
+            {/* ═══ Celebration Modal ═══ */}
+            <Modal
+                visible={showCelebration}
+                transparent
+                animationType="fade"
+                onRequestClose={() => setShowCelebration(false)}
+            >
+                <View style={styles.modalOverlay}>
+                    <View style={styles.modalCard}>
+                        <Text style={styles.modalEmoji}>🌟</Text>
+                        <Text style={styles.modalTitle}>مبارك!</Text>
+                        <Text style={styles.modalSubtitle}>
+                            لقد أتممت {getKhatmaName(newKhatmaNumber - 1)} للقرآن الكريم
+                        </Text>
+                        <Text style={styles.modalHint}>
+                            تبدأ الآن من جديد في رحلة روحانية جديدة
+                        </Text>
+                        <Pressable
+                            onPress={() => setShowCelebration(false)}
+                            style={({ pressed }) => [styles.modalBtn, pressed && { opacity: 0.85 }]}
+                        >
+                            <Text style={styles.modalBtnText}>جزاك الله خيراً</Text>
+                        </Pressable>
+                    </View>
+                </View>
+            </Modal>
 
             {/* Top bar */}
             <View style={styles.topBar}>
@@ -127,7 +220,6 @@ export default function Today() {
                 {/* ═══ Prayer Times Card ═══ */}
                 {prayerData && (
                     <View style={styles.prayerCard}>
-                        {/* Hijri date header */}
                         <View style={styles.prayerHeader}>
                             <Text style={styles.prayerDateHijri}>
                                 {prayerData.date.hijri.day} {prayerData.date.hijri.month.ar}{" "}
@@ -141,7 +233,6 @@ export default function Today() {
                             </Text>
                         </View>
 
-                        {/* Next prayer highlight */}
                         {nextPrayer && (
                             <View style={styles.nextPrayerBox}>
                                 <Text style={styles.nextPrayerLabel}>الصلاة القادمة</Text>
@@ -152,7 +243,6 @@ export default function Today() {
                             </View>
                         )}
 
-                        {/* All 5 prayer times row */}
                         <View style={styles.prayerTimesRow}>
                             {PRAYER_NAMES.map((p) => {
                                 const isNext = nextPrayer?.key === p.key;
@@ -189,6 +279,15 @@ export default function Today() {
 
                 {/* ═══ Quran Progress Hero ═══ */}
                 <View style={styles.hero}>
+                    {/* Khatma badge */}
+                    {khatmat.length > 0 && (
+                        <View style={styles.khatmaBadgeRow}>
+                            <Text style={styles.khatmaBadge}>
+                                ختمات مكتملة: {khatmat.length}
+                            </Text>
+                        </View>
+                    )}
+
                     <Text style={styles.heroLabel}>قراءة اليوم</Text>
                     <Text style={styles.heroRange}>
                         {end === start ? `الحزب ${start}` : `الحزب ${start} — ${end}`}
@@ -196,7 +295,7 @@ export default function Today() {
 
                     <View style={styles.progressBox}>
                         <View style={styles.progressMeta}>
-                            <Text style={styles.progressText}>التقدم</Text>
+                            <Text style={styles.progressText}>التقدم في الختمة الحالية</Text>
                             <Text style={styles.progressText}>{percent}%</Text>
                         </View>
 
@@ -205,7 +304,7 @@ export default function Today() {
                         </View>
 
                         <Text style={styles.progressHint}>
-                            منجز: {Math.min(progressDays * dailyHizb, 60)} / 60 حزب
+                            منجز: {currentCycleHizb} / 60 حزب
                         </Text>
                     </View>
 
@@ -213,26 +312,28 @@ export default function Today() {
                         onPress={complete}
                         style={({ pressed }) => [
                             styles.btn,
-                            doneToday && styles.btnDisabled,
-                            pressed && !doneToday && styles.btnPressed,
+                            pressed && styles.btnPressed,
                         ]}
                     >
-                        <Text style={styles.btnText}>{doneToday ? "تم اليوم" : "تمّ اليوم"}</Text>
+                        <Text style={styles.btnText}>تم</Text>
                     </Pressable>
 
-                    {doneToday && (
-                        <Pressable
-                            onPress={undo}
-                            style={({ pressed }) => [styles.btnGhost, pressed && styles.btnGhostPressed]}
-                        >
-                            <Text style={styles.btnGhostText}>تراجع</Text>
-                        </Pressable>
-                    )}
+                    <Pressable
+                        onPress={undo}
+                        style={({ pressed }) => [styles.btnGhost, pressed && styles.btnGhostPressed]}
+                    >
+                        <Text style={styles.btnGhostText}>تراجع</Text>
+                    </Pressable>
 
                     <Text style={styles.note}>
-                        {doneToday ? "تم تسجيل إنجاز اليوم." : "سجّل إنجاز اليوم مرة واحدة فقط."}
+                        اضغط "تم" بعد إنهاء وردك.
                     </Text>
                 </View>
+
+                {/* ═══ Khatmat History Card ═══ */}
+                {khatmat.length > 0 && (
+                    <KhatmatCard khatmat={khatmat} />
+                )}
 
                 {/* ═══ Daily Hadith Card ═══ */}
                 {dailyHadith && (
@@ -335,6 +436,142 @@ const styles = StyleSheet.create({
     },
     settingsBtnPressed: { opacity: 0.9 },
     settingsBtnText: { color: "#9F5921", fontWeight: "900", fontSize: 16 },
+
+    // ─── Celebration Modal ────────────────────────
+    modalOverlay: {
+        flex: 1,
+        backgroundColor: "rgba(0,0,0,0.5)",
+        justifyContent: "center",
+        alignItems: "center",
+        padding: 30,
+    },
+    modalCard: {
+        backgroundColor: "#F6EBDD",
+        borderRadius: 28,
+        padding: 32,
+        alignItems: "center",
+        borderWidth: 2,
+        borderColor: "#D5A076",
+        width: "100%",
+    },
+    modalEmoji: {
+        fontSize: 56,
+        marginBottom: 12,
+    },
+    modalTitle: {
+        fontSize: 32,
+        fontWeight: "900",
+        color: "#9F5921",
+        marginBottom: 8,
+    },
+    modalSubtitle: {
+        fontSize: 18,
+        fontWeight: "800",
+        color: "#9F5921",
+        textAlign: "center",
+        marginBottom: 10,
+        lineHeight: 28,
+    },
+    modalHint: {
+        fontSize: 13,
+        fontWeight: "700",
+        color: "#7A4318",
+        textAlign: "center",
+        marginBottom: 24,
+    },
+    modalBtn: {
+        backgroundColor: "#D5A076",
+        paddingVertical: 14,
+        paddingHorizontal: 40,
+        borderRadius: 16,
+    },
+    modalBtnText: {
+        color: "#FFFFFF",
+        fontWeight: "900",
+        fontSize: 16,
+    },
+
+    // ─── Khatma Badge ─────────────────────────────
+    khatmaBadgeRow: {
+        flexDirection: "row-reverse",
+        marginBottom: 10,
+    },
+    khatmaBadge: {
+        fontSize: 12,
+        fontWeight: "900",
+        color: "#FFFFFF",
+        backgroundColor: "#9F5921",
+        paddingHorizontal: 12,
+        paddingVertical: 5,
+        borderRadius: 999,
+        overflow: "hidden",
+    },
+
+    // ─── Khatmat History Card ─────────────────────
+    khatmatCard: {
+        backgroundColor: "#F6EBDD",
+        borderRadius: 22,
+        padding: 18,
+        borderWidth: 1,
+        borderColor: "#E2CBB6",
+        marginTop: 14,
+    },
+    khatmatTitle: {
+        fontSize: 16,
+        fontWeight: "900",
+        color: "#9F5921",
+        textAlign: "right",
+        marginBottom: 14,
+    },
+    khatmaRow: {
+        flexDirection: "row-reverse",
+        justifyContent: "space-between",
+        alignItems: "center",
+        backgroundColor: "#EDE1CF",
+        borderRadius: 12,
+        paddingVertical: 10,
+        paddingHorizontal: 14,
+        marginBottom: 8,
+    },
+    khatmaRowText: {
+        fontSize: 13,
+        fontWeight: "800",
+        color: "#7A4318",
+        textAlign: "right",
+        flex: 1,
+    },
+    khatmaRowIcon: {
+        fontSize: 16,
+        marginLeft: 8,
+    },
+    khatmatHeaderRow: {
+        flexDirection: "row-reverse",
+        justifyContent: "space-between",
+        alignItems: "center",
+        marginBottom: 14,
+    },
+    khatmatCount: {
+        fontSize: 12,
+        fontWeight: "800",
+        color: "#D5A076",
+        backgroundColor: "#EDE1CF",
+        paddingHorizontal: 10,
+        paddingVertical: 4,
+        borderRadius: 999,
+        overflow: "hidden",
+    },
+    expandBtn: {
+        marginTop: 6,
+        paddingVertical: 10,
+        alignItems: "center",
+        borderTopWidth: 1,
+        borderTopColor: "#E2CBB6",
+    },
+    expandBtnText: {
+        fontSize: 13,
+        fontWeight: "900",
+        color: "#9F5921",
+    },
 
     // ─── Prayer Times Card ────────────────────────
     prayerCard: {
