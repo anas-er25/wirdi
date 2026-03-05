@@ -1,7 +1,7 @@
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { useRouter } from "expo-router";
 import { useEffect, useMemo, useState } from "react";
-import { Pressable, StyleSheet, Text, TextInput, View } from "react-native";
+import { Platform, Pressable, StatusBar, StyleSheet, Text, TextInput, View } from "react-native";
 // import { scheduleDailyNotification } from "../services/notifications";
 
 export default function Settings() {
@@ -131,6 +131,7 @@ const styles = StyleSheet.create({
         backgroundColor: "#EDE1CF",
         padding: 20,
         justifyContent: "center",
+        marginTop: Platform.OS === "android" ? StatusBar.currentHeight : 0,
     },
     card: {
         backgroundColor: "#F6EBDD",

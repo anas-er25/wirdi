@@ -1,6 +1,6 @@
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { FlatList, Pressable, StyleSheet, Text, View } from "react-native";
+import { FlatList, Platform, Pressable, StatusBar, StyleSheet, Text, View } from "react-native";
 import type { HadithItem } from "../../constants/types";
 import { getHadithsBySection, getSectionName } from "../../services/hadith";
 
@@ -114,6 +114,7 @@ const styles = StyleSheet.create({
         backgroundColor: "#EDE1CF",
         padding: 20,
         paddingTop: 26,
+        marginTop: Platform.OS === "android" ? StatusBar.currentHeight : 0,
     },
 
     header: {

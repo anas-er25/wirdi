@@ -11,7 +11,7 @@ import {
     View,
 } from "react-native";
 import type { HadithItem, PrayerTimesData } from "../constants/types";
-import { getNextPrayer, getPrayerTimes, PRAYER_NAMES } from "../services/adhan";
+import { getLocationStatus, getNextPrayer, getPrayerTimes, PRAYER_NAMES } from "../services/adhan";
 import { getRandomHadith, getSectionName } from "../services/hadith";
 
 function todayKey() {
@@ -26,6 +26,7 @@ export default function Today() {
     const [progressDays, setProgressDays] = useState(0);
     const [doneToday, setDoneToday] = useState(false);
     const [prayerData, setPrayerData] = useState<PrayerTimesData | null>(null);
+    const [locationStatus, setLocationStatus] = useState<"default" | "custom">("default");
     const [dailyHadith, setDailyHadith] = useState<HadithItem | null>(null);
     const router = useRouter();
 
@@ -52,6 +53,7 @@ export default function Today() {
     const loadPrayerTimes = async () => {
         const data = await getPrayerTimes();
         if (data) setPrayerData(data);
+        setLocationStatus(getLocationStatus());
     };
 
     const loadDailyHadith = () => {
@@ -133,6 +135,9 @@ export default function Today() {
                             </Text>
                             <Text style={styles.prayerDateGreg}>
                                 {prayerData.date.readable}
+                            </Text>
+                            <Text style={styles.locationBadge}>
+                                {locationStatus === "custom" ? "📍 موقعك" : "📍 ورزازات"}
                             </Text>
                         </View>
 
@@ -293,6 +298,7 @@ const styles = StyleSheet.create({
         backgroundColor: "#EDE1CF",
         padding: 20,
         paddingTop: 28,
+        marginTop: Platform.OS === "android" ? StatusBar.currentHeight : 0,
     },
 
     topBar: {
@@ -354,6 +360,12 @@ const styles = StyleSheet.create({
         fontSize: 12,
         fontWeight: "700",
         color: "#7A4318",
+    },
+    locationBadge: {
+        fontSize: 11,
+        fontWeight: "700",
+        color: "#9F5921",
+        marginTop: 2,
     },
     nextPrayerBox: {
         backgroundColor: "#FFFFFF",

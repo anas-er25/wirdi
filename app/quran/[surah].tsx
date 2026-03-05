@@ -1,6 +1,6 @@
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { useEffect, useMemo, useState } from "react";
-import { Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
+import { Platform, Pressable, ScrollView, StatusBar, StyleSheet, Text, View } from "react-native";
 import { getMushafMeta, getSurah } from "../../services/quranpedia";
 
 type Ayah = { id: number; number: number; text: string; };
@@ -113,7 +113,7 @@ export default function SurahScreen() {
 }
 
 const styles = StyleSheet.create({
-  screen: { flex: 1, backgroundColor: "#EDE1CF", padding: 20, paddingTop: 26 },
+  screen: { flex: 1, backgroundColor: "#EDE1CF", padding: 20, paddingTop: 26, marginTop: Platform.OS === "android" ? StatusBar.currentHeight : 0 },
 
   header: {
     flexDirection: "row-reverse",
