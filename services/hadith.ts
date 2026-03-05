@@ -93,3 +93,23 @@ export function getSectionName(sectionId: number): string {
     const { metadata } = loadData();
     return metadata.sections[String(sectionId)] || `القسم ${sectionId}`;
 }
+
+/**
+ * Search hadiths across all sections.
+ * Filters by text content (Arabic full-text search).
+ * @param query     Arabic or transliterated search string
+ * @param maxResults  Maximum number of results to return (default 50)
+ */
+export function searchHadiths(query: string, maxResults = 50): HadithItem[] {
+    if (!query.trim()) return [];
+    const { hadiths } = loadData();
+    const q = query.trim();
+    const results: HadithItem[] = [];
+    for (const h of hadiths) {
+        if (h.text.includes(q)) {
+            results.push(h);
+            if (results.length >= maxResults) break;
+        }
+    }
+    return results;
+}

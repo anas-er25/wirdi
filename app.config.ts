@@ -15,10 +15,14 @@ const config: ExpoConfig = {
   ios: {
     supportsTablet: true,
     bundleIdentifier: "com.anaserrakibi.wirdi",
+    infoPlist: {
+      NSLocationWhenInUseUsageDescription:
+        "نستخدم موقعك لحساب أوقات الصلاة الدقيقة في مدينتك.",
+    },
   },
 
   android: {
-    package: "com.anaserrakibi.wirdi", // obligatoire pour build
+    package: "com.anaserrakibi.wirdi",
     versionCode: 1,
     adaptiveIcon: {
       foregroundImage: "./assets/images/icon.png",
@@ -26,6 +30,10 @@ const config: ExpoConfig = {
     },
     edgeToEdgeEnabled: true,
     predictiveBackGestureEnabled: false,
+    permissions: [
+      "ACCESS_COARSE_LOCATION",
+      "ACCESS_FINE_LOCATION",
+    ],
   },
 
   web: {
@@ -35,6 +43,13 @@ const config: ExpoConfig = {
 
   plugins: [
     "expo-router",
+    [
+      "expo-location",
+      {
+        locationWhenInUsePermission:
+          "نستخدم موقعك لحساب أوقات الصلاة الدقيقة في مدينتك.",
+      },
+    ],
     [
       "expo-splash-screen",
       {

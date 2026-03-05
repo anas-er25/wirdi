@@ -1,0 +1,9 @@
+# Enhancements for Wirdi
+
+- [ ] Install dependencies (`expo-location`, `expo-file-system`, `expo-haptics`)
+- [ ] Implement Geolocation for Prayer Times ([services/adhan.ts](file:///d:/Projects/Mobile/wirdi/services/adhan.ts), update [app/today.tsx](file:///d:/Projects/Mobile/wirdi/app/today.tsx))
+- [ ] Implement Offline File Caching (update [services/quranpedia.ts](file:///d:/Projects/Mobile/wirdi/services/quranpedia.ts) and [services/adhan.ts](file:///d:/Projects/Mobile/wirdi/services/adhan.ts) to use FileSystem)
+- [ ] Add Search Functionality (Hadith and Quran screens)
+- [ ] Enhance Adhkar UX (haptics, more categories, full-screen tap)
+- [ ] UI Polish (gradients, icons, typography across screens)
+- [ ] Verify offline functionality and UX

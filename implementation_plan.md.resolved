@@ -1,0 +1,42 @@
+# Enhancements Plan
+
+## User Review Required
+
+> [!IMPORTANT]
+> **Dependencies**: The plan requires adding `expo-location`, `expo-haptics`, and `expo-file-system`. Are you okay with adding these libraries to the [package.json](file:///d:/Projects/Mobile/wirdi/package.json)?
+
+## Proposed Changes
+
+### 1. Geolocation for Prayer Times
+- **Install** `expo-location`
+- **Update** [services/adhan.ts](file:///d:/Projects/Mobile/wirdi/services/adhan.ts) to request location permissions on launch.
+- If granted, fetch the current latitude/longitude and call the Adhan API using coordinates (`/v1/calendar?latitude=X&longitude=Y`).
+- If denied, fallback to a default location (e.g. Ouarzazate) or prompt the user.
+
+### 2. Search Functionality (Hadith & Quran)
+- **Hadith Search**: Add a search bar to the Hadith screen. The search will filter across all 7,500+ hadiths in memory (using [services/hadith.ts](file:///d:/Projects/Mobile/wirdi/services/hadith.ts) to perform the filtering) and display matched snippets inline.
+- **Quran Search**: Add a search bar to the Quran screen. Since fetching the entire Quran JSON on every search is heavy, we will cache the full Mushaf and add a `searchQuran(query)` function in [services/quranpedia.ts](file:///d:/Projects/Mobile/wirdi/services/quranpedia.ts).
+
+### 3. More Adhkar & Immersive UX
+- **Content**: Expand [app/adhkar.tsx](file:///d:/Projects/Mobile/wirdi/app/adhkar.tsx) to include more categories (After Prayer, Sleep, Travel, etc.).
+- **UX**: Create a "full-screen tap" experience. The user can tap anywhere on the screen to increment the counter.
+- **Haptics**: Integrate `expo-haptics` to vibrate lightly on each tap, and a strong vibration when a Zikr is completed.
+
+### 4. Robust Offline Cache Management
+- **File System Caching**: `AsyncStorage` has a 6MB limit on Android, which causes issues for large sets like the full Quran API response. We will use `expo-file-system` to save large API responses locally to the device storage.
+- **Monthly Prayer Cache**: Instead of fetching prayers day-by-day, fetch the **full month's calendar** from Al-Adhan API and cache it. This ensures exact timings work fully offline for the entire month without any network requests.
+
+### 5. UI Improvements
+- Refine the existing warm earth tones with softer gradients, rounded corners, better spacing, and use `@expo/vector-icons` (Ionicons) for visual clarity across the Dashboard, Settings, and lists.
+- Add micro-animations (e.g. scale on press) for interactive cards.
+
+## Verification Plan
+
+### Automated Tests
+- Run `npx tsc --noEmit` to verify type safety across the new services.
+
+### Manual Verification
+- **Offline testing**: Turn off Wi-Fi on the simulator/device and ensure the app loads the dashboard, displays prayer times from the monthly cache, and allows reading Hadiths without crashing.
+- **Location**: Deny location to test fallback, then grant location to test dynamic fetching.
+- **Search**: Type "الصلاة" in both Quran and Hadith search bars and ensure results populate in under ~500ms without blocking the UI.
+- **UX**: Tap through an entire Adhkar category to feel the haptic feedback and verify smooth progression.

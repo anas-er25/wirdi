@@ -1,53 +1,92 @@
+import * as Haptics from "expo-haptics";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { useRouter } from "expo-router";
 import { useEffect, useMemo, useState } from "react";
-import { Pressable, StyleSheet, Text, View } from "react-native";
+import { Platform, Pressable, ScrollView, StatusBar, StyleSheet, Text, View } from "react-native";
 
 type Zikr = { id: string; text: string; count: number; hint?: string };
+type Mode = "morning" | "evening" | "afterPrayer" | "sleep" | "travel";
 
 const MORNING: Zikr[] = [
   { id: "m1", text: "أَصْبَحْنَا وَأَصْبَحَ المُلْكُ لِلَّهِ", count: 1 },
   { id: "m2", text: "اللَّهُمَّ بِكَ أَصْبَحْنَا وَبِكَ أَمْسَيْنَا", count: 1 },
-  { id: "m3", text: "رَضِيتُ بِاللَّهِ رَبًّا وَبِالإِسْلاَمِ دِينًا وَبِمُحَمَّدٍ ﷺ نَبِيًّا", count: 3 },
-  { id: "m4", text: "اللَّهُمَّ إِنِّي أَسْأَلُكَ العَافِيَةَ فِي الدُّنْيَا وَالآخِرَةِ", count: 1 },
-  { id: "m5", text: "سُبْحَانَ اللَّهِ وَبِحَمْدِهِ", count: 100 },
+  { id: "m3", text: "رَضِيتُ بِاللَّهِ رَبًّا وَبِالإِسْلاَمِ دِينًا وَبِمُحَمَّدٍ صلى الله عليه وسلم نَبِيًّا", count: 3 },
+  { id: "m4", text: "اللَّهُمَّ إِنِّي أَسْأَلُكَ الْعَافِيَةَ فِي الدُنْيَا وَالآخِرَةِ", count: 1 },
+  { id: "m5", text: "سُبْحَانَ اللَّهِ وَبِحَمْدِهِ", count: 100, hint: "١٠٠ مرة" },
 ];
 
 const EVENING: Zikr[] = [
   { id: "e1", text: "أَمْسَيْنَا وَأَمْسَى المُلْكُ لِلَّهِ", count: 1 },
   { id: "e2", text: "اللَّهُمَّ بِكَ أَمْسَيْنَا وَبِكَ أَصْبَحْنَا", count: 1 },
-  { id: "e3", text: "رَضِيتُ بِاللَّهِ رَبًّا وَبِالإِسْلاَمِ دِينًا وَبِمُحَمَّدٍ ﷺ نَبِيًّا", count: 3 },
+  { id: "e3", text: "رَضِيتُ بِاللَّهِ رَبًّا وَبِالإِسْلاَمِ دِينًا وَبِمُحَمَّدٍ صلى الله عليه وسلم نَبِيًّا", count: 3 },
   { id: "e4", text: "أَعُوذُ بِكَلِمَاتِ اللَّهِ التَّامَّاتِ مِنْ شَرِّ مَا خَلَقَ", count: 3 },
-  { id: "e5", text: "سُبْحَانَ اللَّهِ وَبِحَمْدِهِ", count: 100 },
+  { id: "e5", text: "سُبْحَانَ اللَّهِ وَبِحَمْدِهِ", count: 100, hint: "١٠٠ مرة" },
 ];
 
-const STORAGE_KEY = "adhkarCounters_v2";
+const AFTER_PRAYER: Zikr[] = [
+  { id: "ap1", text: "أَسْتَغْفِرُ اللَّهَ", count: 3, hint: "٣ مرات" },
+  { id: "ap2", text: "اللَّهُمَّ أَنْتَ السَّلاَمُ وَمِنْكَ السَّلاَمُ تَبَارَكْتَ يَا ذَا الجَلاَلِ وَالإِكْرَامِ", count: 1 },
+  { id: "ap3", text: "لاَ إِلَهَ إِلاَّ اللَّهُ وَحْدَهُ لاَ شَرِيكَ لَهُ لَهُ الْمُلْكُ وَلَهُ الحَمْدُ وَهُوَ عَلَى كُلِّ شَيْءٍ قَدِيرٌ", count: 1 },
+  { id: "ap4", text: "سُبْحَانَ اللَّهِ", count: 33, hint: "٣٣ مرة" },
+  { id: "ap5", text: "الْحَمْدُ لِلَّهِ", count: 33, hint: "٣٣ مرة" },
+  { id: "ap6", text: "اللَّهُ أَكْبَرُ", count: 34, hint: "٣٤ مرة" },
+];
+
+const SLEEP: Zikr[] = [
+  { id: "sl1", text: "بِاسْمِكَ اللَّهُمَّ أَمُوتُ وَأَحْيَا", count: 1 },
+  { id: "sl2", text: "اللَّهُمَّ قِنِي عَذَابَكَ يَوْمَ تَبْعَثُ عِبَادَكَ", count: 3, hint: "٣ مرات" },
+  { id: "sl3", text: "سُبْحَانَ اللَّهِ", count: 33, hint: "٣٣ مرة" },
+  { id: "sl4", text: "الْحَمْدُ لِلَّهِ", count: 33, hint: "٣٣ مرة" },
+  { id: "sl5", text: "اللَّهُ أَكْبَرُ", count: 34, hint: "٣٤ مرة" },
+];
+
+const TRAVEL: Zikr[] = [
+  { id: "tr1", text: "اللَّهُ أَكْبَرُ ، اللَّهُ أَكْبَرُ ، اللَّهُ أَكْبَرُ", count: 1 },
+  { id: "tr2", text: "سُبْحَانَ الَّذِي سَخَّرَ لَنَا هَذَا وَمَا كُنَّا لَهُ مُقْرِنِينَ وَإِنَّا إِلَى رَبِّنَا لَمُنقَلِبُونَ", count: 1 },
+  { id: "tr3", text: "اللَّهُمَّ إِنَّا نَسْأَلُكَ فِي سَفَرِنَا هَذَا الْبِرَّ وَالتَّقْوَى", count: 1 },
+  { id: "tr4", text: "اللَّهُمَّ أَنْتَ الصَّاحِبُ فِي السَّفَرِ وَالخَلِيفَةُ فِي الأَهْلِ", count: 1 },
+];
+
+const ALL_LISTS: Record<Mode, Zikr[]> = {
+  morning: MORNING,
+  evening: EVENING,
+  afterPrayer: AFTER_PRAYER,
+  sleep: SLEEP,
+  travel: TRAVEL,
+};
+
+const MODE_LABELS: Record<Mode, string> = {
+  morning: "الصباح",
+  evening: "المساء",
+  afterPrayer: "بعد الصلاة",
+  sleep: "النوم",
+  travel: "السفر",
+};
+
+const MODES: Mode[] = ["morning", "evening", "afterPrayer", "sleep", "travel"];
+
+const STORAGE_KEY = "adhkarCounters_v3";
 const DATE_KEY = "adhkar_last_reset_date_v1";
 
 function dateKey() {
   const d = new Date();
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(
-    d.getDate()
-  ).padStart(2, "0")}`;
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
 }
 
-function defaultModeByTime(): "morning" | "evening" {
+function defaultModeByTime(): Mode {
   const h = new Date().getHours();
-  // morning: 04:00–15:59, evening: 16:00–03:59
   return h >= 16 || h < 4 ? "evening" : "morning";
 }
 
-function k(mode: "morning" | "evening", zikrId: string) {
+function k(mode: Mode, zikrId: string) {
   return `${mode}:${zikrId}`;
 }
 
 export default function Adhkar() {
   const router = useRouter();
 
-  const lists = useMemo(() => ({ morning: MORNING, evening: EVENING }), []);
-  const [mode, setMode] = useState<"morning" | "evening">(defaultModeByTime());
+  const [mode, setMode] = useState<Mode>(defaultModeByTime());
   const [idx, setIdx] = useState(0);
-
   const [counters, setCounters] = useState<Record<string, number>>({});
   const [loaded, setLoaded] = useState(false);
 
@@ -56,7 +95,6 @@ export default function Adhkar() {
     (async () => {
       const today = dateKey();
       const last = await AsyncStorage.getItem(DATE_KEY);
-
       if (last !== today) {
         await AsyncStorage.setItem(STORAGE_KEY, JSON.stringify({}));
         await AsyncStorage.setItem(DATE_KEY, today);
@@ -78,13 +116,12 @@ export default function Adhkar() {
 
   // Keep index in range when switching mode
   useEffect(() => {
-    const list = lists[mode];
+    const list = ALL_LISTS[mode];
     if (idx >= list.length) setIdx(0);
-  }, [mode, idx, lists]);
+  }, [mode, idx]);
 
-  const list = lists[mode];
+  const list = ALL_LISTS[mode];
   const current = list[idx];
-
   const value = current ? counters[k(mode, current.id)] ?? 0 : 0;
   const total = current ? current.count : 1;
   const done = current ? value >= total : false;
@@ -100,22 +137,30 @@ export default function Adhkar() {
   const resetCurrent = async () => {
     if (!current) return;
     const key = k(mode, current.id);
-    const next = { ...counters, [key]: 0 };
-    await persist(next);
+    await persist({ ...counters, [key]: 0 });
   };
 
   const incrementAndAdvance = async () => {
     if (!current) return;
-
     const key = k(mode, current.id);
     const cur = counters[key] ?? 0;
     const nextVal = Math.min(cur + 1, current.count);
+    const isComplete = nextVal >= current.count && cur < current.count;
+
+    // Haptic feedback
+    if (isComplete) {
+      await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+    } else {
+      await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    }
 
     const nextCounters = { ...counters, [key]: nextVal };
     await persist(nextCounters);
 
-    // UX: auto-advance immediately on every click
-    if (idx < list.length - 1) setIdx(idx + 1);
+    // Auto-advance after completing a zikr
+    if (isComplete && idx < list.length - 1) {
+      setTimeout(() => setIdx((p) => p + 1), 250);
+    }
   };
 
   const resetGroup = async () => {
@@ -128,16 +173,15 @@ export default function Adhkar() {
   const completedCount = useMemo(() => {
     let c = 0;
     for (const item of list) {
-      const v = counters[k(mode, item.id)] ?? 0;
-      if (v >= item.count) c++;
+      if ((counters[k(mode, item.id)] ?? 0) >= item.count) c++;
     }
     return c;
   }, [counters, list, mode]);
 
-  const percent = useMemo(() => {
-    if (list.length === 0) return 0;
-    return Math.round((completedCount / list.length) * 100);
-  }, [completedCount, list.length]);
+  const percent = useMemo(
+    () => (list.length === 0 ? 0 : Math.round((completedCount / list.length) * 100)),
+    [completedCount, list.length]
+  );
 
   if (!loaded) {
     return (
@@ -157,68 +201,63 @@ export default function Adhkar() {
         >
           <Text style={styles.headerBtnText}>↩</Text>
         </Pressable>
-
         <View style={{ flex: 1 }}>
           <Text style={styles.headerTitle}>الأذكار</Text>
           <Text style={styles.headerSub}>
-            {mode === "morning" ? "أذكار الصباح" : "أذكار المساء"} • {percent}%
+            {MODE_LABELS[mode]} • {percent}%
           </Text>
         </View>
       </View>
 
-      {/* Mode switch */}
-      <View style={styles.segment}>
-        <Pressable
-          onPress={() => {
-            setMode("evening");
-            setIdx(0);
-          }}
-          style={({ pressed }) => [
-            styles.segmentBtn,
-            mode === "evening" && styles.segmentBtnActive,
-            pressed && { opacity: 0.9 },
-          ]}
-        >
-          <Text style={[styles.segmentText, mode === "evening" && styles.segmentTextActive]}>
-            المساء
-          </Text>
-        </Pressable>
+      {/* Category horizontal scroll */}
+      <ScrollView
+        horizontal
+        showsHorizontalScrollIndicator={false}
+        contentContainerStyle={styles.categoryRow}
+        style={{ flexGrow: 0 }}
+      >
+        {MODES.map((m) => (
+          <Pressable
+            key={m}
+            onPress={() => { setMode(m); setIdx(0); }}
+            style={({ pressed }) => [
+              styles.categoryBtn,
+              mode === m && styles.categoryBtnActive,
+              pressed && { opacity: 0.85 },
+            ]}
+          >
+            <Text style={[styles.categoryText, mode === m && styles.categoryTextActive]}>
+              {MODE_LABELS[m]}
+            </Text>
+          </Pressable>
+        ))}
+      </ScrollView>
 
-        <Pressable
-          onPress={() => {
-            setMode("morning");
-            setIdx(0);
-          }}
-          style={({ pressed }) => [
-            styles.segmentBtn,
-            mode === "morning" && styles.segmentBtnActive,
-            pressed && { opacity: 0.9 },
-          ]}
-        >
-          <Text style={[styles.segmentText, mode === "morning" && styles.segmentTextActive]}>
-            الصباح
-          </Text>
-        </Pressable>
-      </View>
-
-      {/* Focus card */}
-      <View style={styles.card}>
+      {/* Full-screen tappable card */}
+      <Pressable
+        onPress={incrementAndAdvance}
+        style={({ pressed }) => [styles.card, pressed && styles.cardPressed]}
+        accessible
+        accessibilityRole="button"
+        accessibilityLabel="اضغط للتسبيح"
+      >
         <View style={styles.cardTopRow}>
-          <Text style={styles.stepText}>
-            {idx + 1} / {list.length}
-          </Text>
-          <Text style={styles.badge}>{done ? "تم" : "جاري"}</Text>
+          <Text style={styles.stepText}>{idx + 1} / {list.length}</Text>
+          <Text style={styles.badge}>{done ? "✓ تم" : "جاري"}</Text>
         </View>
 
-        <Text style={styles.zikr} numberOfLines={6}>
+        <Text style={styles.zikr} numberOfLines={7}>
           {current?.text ?? ""}
         </Text>
+
+        {current?.hint && (
+          <Text style={styles.hintText}>{current.hint}</Text>
+        )}
 
         <View style={styles.progressRow}>
           <Text style={styles.counter}>
             {Math.min(value, total)} / {total}
           </Text>
-
           <View style={styles.barTrack}>
             <View
               style={[
@@ -229,24 +268,19 @@ export default function Adhkar() {
           </View>
         </View>
 
-        <View style={styles.actionsRow}>
-          <Pressable
-            onPress={resetCurrent}
-            style={({ pressed }) => [styles.ghostBtn, pressed && { opacity: 0.9 }]}
-          >
-            <Text style={styles.ghostBtnText}>تصفير</Text>
-          </Pressable>
+        <Text style={styles.tapHint}>اضغط في أي مكان للتسبيح</Text>
+      </Pressable>
 
-          <Pressable
-            onPress={incrementAndAdvance}
-            style={({ pressed }) => [styles.primaryBtn, pressed && styles.primaryBtnPressed]}
-          >
-            <Text style={styles.primaryBtnText}>+ تسبيح</Text>
-          </Pressable>
-        </View>
+      {/* Controls */}
+      <View style={styles.actionsRow}>
+        <Pressable
+          onPress={resetCurrent}
+          style={({ pressed }) => [styles.ghostBtn, pressed && { opacity: 0.9 }]}
+        >
+          <Text style={styles.ghostBtnText}>تصفير</Text>
+        </Pressable>
 
-        {/* Navigation */}
-        <View style={styles.navRow}>
+        <View style={styles.navBtns}>
           <Pressable
             onPress={goPrev}
             disabled={idx === 0}
@@ -258,14 +292,6 @@ export default function Adhkar() {
           >
             <Text style={styles.navBtnText}>السابق</Text>
           </Pressable>
-
-          <Pressable
-            onPress={resetGroup}
-            style={({ pressed }) => [styles.resetGroupBtn, pressed && { opacity: 0.9 }]}
-          >
-            <Text style={styles.resetGroupText}>إعادة المجموعة</Text>
-          </Pressable>
-
           <Pressable
             onPress={goNext}
             disabled={idx === list.length - 1}
@@ -279,72 +305,57 @@ export default function Adhkar() {
           </Pressable>
         </View>
 
-        <Text style={styles.hint}>
-          عند الضغط على “+ تسبيح” ينتقل تلقائيًا للذكر التالي. للرجوع استخدم “السابق”.
-        </Text>
+        <Pressable
+          onPress={resetGroup}
+          style={({ pressed }) => [styles.resetGroupBtn, pressed && { opacity: 0.9 }]}
+        >
+          <Text style={styles.resetGroupText}>إعادة</Text>
+        </Pressable>
       </View>
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  screen: { flex: 1, backgroundColor: "#EDE1CF", padding: 20, paddingTop: 26 },
+  screen: { flex: 1, backgroundColor: "#EDE1CF", padding: 20, paddingTop: 26, marginTop: Platform.OS === "android" ? StatusBar.currentHeight : 0, },
 
-  header: {
-    flexDirection: "row-reverse",
-    alignItems: "center",
-    gap: 10,
-    marginBottom: 14,
-  },
+  header: { flexDirection: "row-reverse", alignItems: "center", gap: 10, marginBottom: 12 },
   headerBtn: {
-    width: 44,
-    height: 44,
-    borderRadius: 14,
-    backgroundColor: "#F6EBDD",
-    borderWidth: 1,
-    borderColor: "#E2CBB6",
-    alignItems: "center",
-    justifyContent: "center",
+    width: 44, height: 44, borderRadius: 14,
+    backgroundColor: "#F6EBDD", borderWidth: 1, borderColor: "#E2CBB6",
+    alignItems: "center", justifyContent: "center",
   },
   headerBtnText: { color: "#9F5921", fontWeight: "900", fontSize: 18 },
   headerTitle: { fontSize: 22, fontWeight: "900", color: "#9F5921", textAlign: "right" },
-  headerSub: {
-    marginTop: 4,
-    fontSize: 12,
-    fontWeight: "800",
-    color: "#7A4318",
-    textAlign: "right",
-  },
+  headerSub: { marginTop: 4, fontSize: 12, fontWeight: "800", color: "#7A4318", textAlign: "right" },
 
-  segment: {
+  categoryRow: {
     flexDirection: "row-reverse",
-    backgroundColor: "#F6EBDD",
-    borderWidth: 1,
-    borderColor: "#E2CBB6",
-    borderRadius: 16,
-    padding: 6,
     gap: 8,
-    marginBottom: 14,
+    paddingHorizontal: 2,
+    paddingVertical: 4,
+    marginBottom: 12,
   },
-  segmentBtn: {
-    flex: 1,
-    paddingVertical: 10,
-    borderRadius: 12,
-    alignItems: "center",
-    backgroundColor: "transparent",
+  categoryBtn: {
+    paddingVertical: 8, paddingHorizontal: 14,
+    borderRadius: 20,
+    backgroundColor: "#F6EBDD",
+    borderWidth: 1, borderColor: "#E2CBB6",
   },
-  segmentBtnActive: { backgroundColor: "#D5A076" },
-  segmentText: { color: "#9F5921", fontWeight: "900" },
-  segmentTextActive: { color: "#9F5921" },
+  categoryBtnActive: { backgroundColor: "#D5A076", borderColor: "#C48B61" },
+  categoryText: { color: "#9F5921", fontWeight: "800", fontSize: 13 },
+  categoryTextActive: { color: "#5C3A1E" },
 
   card: {
     flex: 1,
     backgroundColor: "#F6EBDD",
     borderRadius: 22,
-    padding: 18,
+    padding: 20,
     borderWidth: 1,
     borderColor: "#E2CBB6",
+    marginBottom: 12,
   },
+  cardPressed: { backgroundColor: "#EDD9C0" },
 
   cardTopRow: {
     flexDirection: "row-reverse",
@@ -354,87 +365,62 @@ const styles = StyleSheet.create({
   },
   stepText: { color: "#7A4318", fontWeight: "900", fontSize: 12 },
   badge: {
-    color: "#9F5921",
-    fontWeight: "900",
-    fontSize: 12,
+    color: "#9F5921", fontWeight: "900", fontSize: 12,
     backgroundColor: "#EDE1CF",
-    paddingVertical: 5,
-    paddingHorizontal: 12,
-    borderRadius: 999,
-    overflow: "hidden",
+    paddingVertical: 5, paddingHorizontal: 12,
+    borderRadius: 999, overflow: "hidden",
   },
 
   zikr: {
-    fontSize: 20,
-    fontWeight: "900",
-    color: "#9F5921",
-    textAlign: "right",
-    lineHeight: 32,
-    marginTop: 6,
+    fontSize: 20, fontWeight: "900", color: "#9F5921",
+    textAlign: "right", lineHeight: 34, marginTop: 6, flex: 1,
+  },
+
+  hintText: {
+    marginTop: 6, color: "#B89A7A", fontWeight: "800",
+    fontSize: 12, textAlign: "right",
   },
 
   progressRow: { marginTop: 16 },
   counter: { color: "#7A4318", fontWeight: "900", textAlign: "right", fontSize: 13, marginBottom: 8 },
   barTrack: {
-    height: 12,
-    borderRadius: 999,
-    backgroundColor: "#EDE1CF",
-    overflow: "hidden",
-    borderWidth: 1,
-    borderColor: "#E2CBB6",
+    height: 12, borderRadius: 999,
+    backgroundColor: "#EDE1CF", overflow: "hidden",
+    borderWidth: 1, borderColor: "#E2CBB6",
   },
   barFill: { height: "100%", borderRadius: 999, backgroundColor: "#D5A076" },
 
-  actionsRow: { flexDirection: "row-reverse", gap: 10, marginTop: 16 },
-  primaryBtn: {
-    flex: 1,
-    backgroundColor: "#D5A076",
-    paddingVertical: 14,
-    borderRadius: 16,
-    alignItems: "center",
+  tapHint: {
+    marginTop: 14, color: "#B89A7A", fontWeight: "700",
+    fontSize: 12, textAlign: "center",
   },
-  primaryBtnPressed: { backgroundColor: "#C48B61" },
-  primaryBtnText: { color: "#9F5921", fontWeight: "900", fontSize: 16 },
-  ghostBtn: {
-    width: 90,
-    backgroundColor: "#F6EBDD",
-    borderWidth: 1,
-    borderColor: "#D5A076",
-    paddingVertical: 14,
-    borderRadius: 16,
+
+  actionsRow: {
+    flexDirection: "row-reverse",
     alignItems: "center",
+    gap: 8,
+    paddingBottom: 6,
+  },
+  ghostBtn: {
+    backgroundColor: "#F6EBDD", borderWidth: 1, borderColor: "#D5A076",
+    paddingVertical: 12, paddingHorizontal: 14,
+    borderRadius: 16,
   },
   ghostBtnText: { color: "#9F5921", fontWeight: "900" },
 
-  navRow: { flexDirection: "row-reverse", gap: 10, marginTop: 14, alignItems: "center" },
+  navBtns: { flex: 1, flexDirection: "row-reverse", gap: 8 },
   navBtn: {
     flex: 1,
-    backgroundColor: "#EDE1CF",
-    borderWidth: 1,
-    borderColor: "#E2CBB6",
-    paddingVertical: 12,
-    borderRadius: 16,
-    alignItems: "center",
+    backgroundColor: "#EDE1CF", borderWidth: 1, borderColor: "#E2CBB6",
+    paddingVertical: 12, borderRadius: 16, alignItems: "center",
   },
-  navBtnDisabled: { opacity: 0.5 },
+  navBtnDisabled: { opacity: 0.4 },
   navBtnText: { color: "#9F5921", fontWeight: "900" },
 
   resetGroupBtn: {
-    paddingVertical: 12,
-    paddingHorizontal: 12,
+    backgroundColor: "#F6EBDD", borderWidth: 1, borderColor: "#D5A076",
+    paddingVertical: 12, paddingHorizontal: 14,
     borderRadius: 16,
-    backgroundColor: "#F6EBDD",
-    borderWidth: 1,
-    borderColor: "#D5A076",
   },
   resetGroupText: { color: "#9F5921", fontWeight: "900", fontSize: 12 },
-
-  hint: {
-    marginTop: 12,
-    color: "#7A4318",
-    fontWeight: "800",
-    fontSize: 12,
-    textAlign: "right",
-    lineHeight: 18,
-  },
 });

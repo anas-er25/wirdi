@@ -96,6 +96,7 @@ const styles = StyleSheet.create({
     backgroundColor: "#EDE1CF",
     padding: 20,
     justifyContent: "center",
+    marginTop: Platform.OS === "android" ? StatusBar.currentHeight : 0,
   },
   card: {
     backgroundColor: "#F6EBDD",

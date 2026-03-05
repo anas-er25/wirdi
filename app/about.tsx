@@ -1,5 +1,5 @@
 import { useRouter } from "expo-router";
-import { Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
+import { Platform, Pressable, ScrollView, StatusBar, StyleSheet, Text, View } from "react-native";
 
 export default function About() {
   const router = useRouter();
@@ -60,6 +60,7 @@ const styles = StyleSheet.create({
     backgroundColor: "#EDE1CF",
     padding: 20,
     paddingTop: 26,
+    marginTop: Platform.OS === "android" ? StatusBar.currentHeight : 0,
   },
 
   header: {
